@@ -1,0 +1,79 @@
+name: Build and Release SL
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        variant: [sl, erutaso, pyonpyon]
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup MSVC
+      uses: ilammy/msvc-dev-cmd@v1
+
+    - name: Download SL source
+      run: |
+        call download.cmd
+      shell: cmd
+
+    - name: Configure CMake
+      run: |
+        cmake -B build -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -DSL_VARIANT=${{ matrix.variant }}
+
+    - name: Build
+      run: |
+        cmake --build build
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.variant }}-windows
+        path: build/*.exe
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Prepare release assets
+      run: |
+        mkdir release
+        for dir in artifacts/*; do
+          if [ -d "$dir" ]; then
+            variant=$(basename "$dir" | sed 's/-windows//')
+            cp "$dir"/*.exe "release/${variant}.exe"
+          fi
+        done
+        ls -la release/
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: release/*.exe
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
