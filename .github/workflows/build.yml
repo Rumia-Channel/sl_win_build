@@ -28,6 +28,13 @@ jobs:
         call download.cmd
       shell: cmd
 
+    - name: Checkout variant branch
+      run: |
+        cd sl
+        git checkout ${{ matrix.variant }}
+      shell: cmd
+      if: matrix.variant != 'sl'
+
     - name: Configure CMake
       run: |
         cmake -B build -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -DSL_VARIANT=${{ matrix.variant }}
